@@ -1,12 +1,13 @@
 package main
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestTotal(t *testing.T) {
+func TestExample(t *testing.T) {
 	name, surname, patr := "Dmitriy", "Ushakov", "Vasilevich"
 	testBody := BodyData{
 		Name:       &name,
@@ -14,7 +15,12 @@ func TestTotal(t *testing.T) {
 		Patronymic: &patr,
 	}
 	testChIn, testChOut := make(chan BodyData), make(chan EnrichedData)
-	go enrichHandler(testChIn, testChOut)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		enrichHandler(testChIn, testChOut)
+	}()
 	testChIn <- testBody
 	res := <-testChOut
 	assert.Equal(t, 42, res.Age)

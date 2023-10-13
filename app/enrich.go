@@ -86,14 +86,18 @@ func enrichData(bodyData *BodyData) (*EnrichedData, error) {
 }
 
 func enrichHandler(dataChannel <-chan BodyData, dbChannel chan<- EnrichedData) {
-	for {
-		select {
-		case data := <-dataChannel:
-			enriched, err := enrichData(&data)
-			if err != nil {
-				break
-			}
-			dbChannel <- *enriched
+	select {
+	case data := <-dataChannel:
+		enriched, err := enrichData(&data)
+		if err != nil {
+			break
 		}
+		dbChannel <- *enriched
+	}
+}
+
+func enrichListener(dataChannel <-chan BodyData, dbChannel chan<- EnrichedData) {
+	for {
+		enrichHandler(dataChannel, dbChannel)
 	}
 }
