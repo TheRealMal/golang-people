@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 )
 
@@ -52,29 +53,29 @@ func getData[T any](apiURI *string, result *T) error {
 
 // Enriches given FIO w/ age, gender and nationality
 // by requesting provided API
-func enrichData(bodyData *BodyData) (*EnrichedData, error) {
+func enrichData(bodyData *BodyData) (EnrichedData, error) {
 	ageAPI := "https://api.agify.io/?name=" + *bodyData.Name
 	var ageRes AgeBody
 	if err := getData[AgeBody](&ageAPI, &ageRes); err != nil {
-		return nil, err
+		return EnrichedData{}, err
 	}
 
 	genderAPI := "https://api.genderize.io/?name=" + *bodyData.Name
 	var genderRes GenderBody
 	if err := getData[GenderBody](&genderAPI, &genderRes); err != nil {
-		return nil, err
+		return EnrichedData{}, err
 	}
 
 	nationalityAPI := "https://api.nationalize.io/?name=" + *bodyData.Name
 	var nationalityRes NationalityBody
 	if err := getData[NationalityBody](&nationalityAPI, &nationalityRes); err != nil {
-		return nil, err
+		return EnrichedData{}, err
 	}
 
 	if ageRes.Age == nil || genderRes.Gender == nil || len(nationalityRes.Nationality) == 0 {
-		return nil, errors.New("Provided FIO does not exist")
+		return EnrichedData{}, errors.New("Provided FIO does not exist")
 	}
-	enrichedData := &EnrichedData{
+	enrichedData := EnrichedData{
 		Name:        *bodyData.Name,
 		Surname:     *bodyData.Surname,
 		Patronymic:  *bodyData.Patronymic,
@@ -85,19 +86,27 @@ func enrichData(bodyData *BodyData) (*EnrichedData, error) {
 	return enrichedData, nil
 }
 
-func enrichHandler(dataChannel <-chan BodyData, dbChannel chan<- EnrichedData) {
+func enrichHandler(dataChannel <-chan BodyData, dbChannel chan<- EnrichedData, errorsChannel chan<- []byte) {
 	select {
 	case data := <-dataChannel:
 		enriched, err := enrichData(&data)
 		if err != nil {
-			break
+			errorMsg := "Provided wrong FIO"
+			bodyBytes, _ := json.Marshal(data)
+			body := string(bodyBytes[:])
+			log.Printf("%s", errorMsg)
+			jsonErrorMsg, _ := json.Marshal(ErrorData{
+				ErrorMsg: &errorMsg,
+				Body:     &body,
+			})
+			errorsChannel <- jsonErrorMsg
 		}
-		dbChannel <- *enriched
+		dbChannel <- enriched
 	}
 }
 
-func enrichListener(dataChannel <-chan BodyData, dbChannel chan<- EnrichedData) {
+func enrichListener(dataChannel <-chan BodyData, dbChannel chan<- EnrichedData, errorsChannel chan<- []byte) {
 	for {
-		enrichHandler(dataChannel, dbChannel)
+		enrichHandler(dataChannel, dbChannel, errorsChannel)
 	}
 }
