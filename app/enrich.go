@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 )
 
@@ -55,19 +54,18 @@ func getData[T any](apiURI *string, result *T) error {
 // by requesting provided API
 func enrichData(bodyData *BodyData) (EnrichedData, error) {
 	ageAPI := "https://api.agify.io/?name=" + *bodyData.Name
+	genderAPI := "https://api.genderize.io/?name=" + *bodyData.Name
+	nationalityAPI := "https://api.nationalize.io/?name=" + *bodyData.Name
 	var ageRes AgeBody
+	var genderRes GenderBody
+	var nationalityRes NationalityBody
+
 	if err := getData[AgeBody](&ageAPI, &ageRes); err != nil {
 		return EnrichedData{}, err
 	}
-
-	genderAPI := "https://api.genderize.io/?name=" + *bodyData.Name
-	var genderRes GenderBody
 	if err := getData[GenderBody](&genderAPI, &genderRes); err != nil {
 		return EnrichedData{}, err
 	}
-
-	nationalityAPI := "https://api.nationalize.io/?name=" + *bodyData.Name
-	var nationalityRes NationalityBody
 	if err := getData[NationalityBody](&nationalityAPI, &nationalityRes); err != nil {
 		return EnrichedData{}, err
 	}
@@ -75,36 +73,30 @@ func enrichData(bodyData *BodyData) (EnrichedData, error) {
 	if ageRes.Age == nil || genderRes.Gender == nil || len(nationalityRes.Nationality) == 0 {
 		return EnrichedData{}, errors.New("Provided FIO does not exist")
 	}
-	enrichedData := EnrichedData{
+	return EnrichedData{
 		Name:        *bodyData.Name,
 		Surname:     *bodyData.Surname,
 		Patronymic:  *bodyData.Patronymic,
 		Age:         *ageRes.Age,
 		Gender:      *genderRes.Gender,
 		Nationality: nationalityRes.Nationality[0].Country_id,
-	}
-	return enrichedData, nil
+	}, nil
 }
 
+// Waits for new enriched data in channel
 func enrichHandler(dataChannel <-chan BodyData, dbChannel chan<- EnrichedData, errorsChannel chan<- []byte) {
 	select {
 	case data := <-dataChannel:
 		enriched, err := enrichData(&data)
 		if err != nil {
-			errorMsg := "Provided wrong FIO"
-			bodyBytes, _ := json.Marshal(data)
-			body := string(bodyBytes[:])
-			log.Printf("%s", errorMsg)
-			jsonErrorMsg, _ := json.Marshal(ErrorData{
-				ErrorMsg: &errorMsg,
-				Body:     &body,
-			})
-			errorsChannel <- jsonErrorMsg
+			errorsChannel <- prepareErrorBytes[BodyData](err.Error(), &data)
 		}
 		dbChannel <- enriched
 	}
 }
 
+// Just loops enrichHandler
+// Done to split functions for proper testing
 func enrichListener(dataChannel <-chan BodyData, dbChannel chan<- EnrichedData, errorsChannel chan<- []byte) {
 	for {
 		enrichHandler(dataChannel, dbChannel, errorsChannel)

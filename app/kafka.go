@@ -48,28 +48,11 @@ func kafkaHandler(topic string, brokers []string, dataChannel chan<- BodyData, e
 			fmt.Printf("Received message: %s\n", msg.Value)
 			var bodyFIO BodyData
 			if err := json.Unmarshal(msg.Value, &bodyFIO); err != nil {
-				errorMsg := "Failed while parsing json"
-				body := string(msg.Value[:])
-				log.Printf("%s: %v", errorMsg, err)
-				jsonErrorMsg, _ := json.Marshal(ErrorData{
-					ErrorMsg: &errorMsg,
-					Body:     &body,
-				})
-				errorsChannel <- jsonErrorMsg
-				// sendErrorToQueue(&producer, outTopic, jsonErrorMsg)
+				errorsChannel <- prepareErrorBytes[BodyData]("Failed while parsing json", &bodyFIO)
 				continue
 			}
 			if bodyFIO.Name == nil || bodyFIO.Surname == nil {
-				errorMsg := "Required fields not found"
-				bodyBytes, _ := json.Marshal(bodyFIO)
-				body := string(bodyBytes[:])
-				log.Printf("%s", errorMsg)
-				jsonErrorMsg, _ := json.Marshal(ErrorData{
-					ErrorMsg: &errorMsg,
-					Body:     &body,
-				})
-				errorsChannel <- jsonErrorMsg
-				// sendErrorToQueue(&producer, outTopic, jsonErrorMsg)
+				errorsChannel <- prepareErrorBytes[BodyData]("Required fields not found", &bodyFIO)
 				continue
 			}
 
@@ -80,19 +63,16 @@ func kafkaHandler(topic string, brokers []string, dataChannel chan<- BodyData, e
 	}
 }
 
-func kafkaErrorsHandler(brokers []string, topic string, errorsChannel <-chan []byte) {
-	// Create new Kafka producer
-	producer, err := sarama.NewSyncProducer(brokers, nil)
-	if err != nil {
-		log.Fatalf("Error creating Kafka producer: %v", err)
-	}
-	defer producer.Close()
-	for {
-		select {
-		case msg := <-errorsChannel:
-			sendErrorToQueue(&producer, topic, msg)
-		}
-	}
+// Returns bytes array for given message and body
+// that led to error
+func prepareErrorBytes[T any](message string, data *T) []byte {
+	bodyBytes, _ := json.Marshal(*data)
+	body := string(bodyBytes[:])
+	jsonErrorMsg, _ := json.Marshal(ErrorData{
+		ErrorMsg: &message,
+		Body:     &body,
+	})
+	return jsonErrorMsg
 }
 
 // Sends error message to Kafka queue
@@ -103,5 +83,21 @@ func sendErrorToQueue(producer *sarama.SyncProducer, topic string, data []byte) 
 	}
 	if _, _, err := (*producer).SendMessage(failedMsg); err != nil {
 		log.Printf("Failed to send message to %s queue: %v", topic, err)
+	}
+}
+
+// Listens error channel
+// Produces message to provided Kafka topic
+func kafkaErrorsHandler(brokers []string, topic string, errorsChannel <-chan []byte) {
+	producer, err := sarama.NewSyncProducer(brokers, nil)
+	if err != nil {
+		log.Fatalf("Error creating Kafka producer: %v", err)
+	}
+	defer producer.Close()
+	for {
+		select {
+		case msg := <-errorsChannel:
+			sendErrorToQueue(&producer, topic, msg)
+		}
 	}
 }

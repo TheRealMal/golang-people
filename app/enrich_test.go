@@ -49,7 +49,7 @@ func TestBadExample(t *testing.T) {
 	res := <-testChErr
 	var testError ErrorData
 	if err := json.Unmarshal(res, &testError); err == nil {
-		assert.Equal(t, "Provided wrong FIO", *testError.ErrorMsg)
+		assert.Equal(t, "Provided FIO does not exist", *testError.ErrorMsg)
 		return
 	}
 	t.Error("Wrong error message format")
