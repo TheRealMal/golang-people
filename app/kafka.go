@@ -24,7 +24,7 @@ type ErrorData struct {
 // Creates Kafka consumer for FIO topic and producer for FIO_FAILED
 // If consumer receives message with wrong format producer sends
 // error message to FIO_FAILED topic
-func kafkaHandler(topic string, brokers []string, dataChannel chan<- BodyData, errorsChannel chan<- []byte) {
+func kafkaHandler(brokers []string, topic string, dataChannel chan<- BodyData, errorsChannel chan<- []byte) {
 	// Create new Kafka consumer
 	consumer, err := sarama.NewConsumer(brokers, nil)
 	if err != nil {
@@ -41,7 +41,7 @@ func kafkaHandler(topic string, brokers []string, dataChannel chan<- BodyData, e
 	// Channel for termination signal
 	sigterm := make(chan os.Signal, 1)
 	signal.Notify(sigterm, os.Interrupt)
-	fmt.Printf("Waiting for Kafka messages...")
+	fmt.Printf("Waiting for Kafka messages...\n")
 	for {
 		select {
 		case msg := <-partitionConsumer.Messages():
@@ -55,9 +55,13 @@ func kafkaHandler(topic string, brokers []string, dataChannel chan<- BodyData, e
 				errorsChannel <- prepareErrorBytes[BodyData]("Required fields not found", &bodyFIO)
 				continue
 			}
-
+			if bodyFIO.Patronymic == nil {
+				tmp := ""
+				bodyFIO.Patronymic = &tmp
+			}
+			dataChannel <- bodyFIO
 		case <-sigterm:
-			fmt.Println("Received SIGINT. Shutting down.")
+			fmt.Printf("Received SIGINT. Shutting down.\n")
 			return
 		}
 	}
@@ -82,7 +86,7 @@ func sendErrorToQueue(producer *sarama.SyncProducer, topic string, data []byte) 
 		Value: sarama.StringEncoder(string(data)),
 	}
 	if _, _, err := (*producer).SendMessage(failedMsg); err != nil {
-		log.Printf("Failed to send message to %s queue: %v", topic, err)
+		log.Printf("Failed to send message to %s queue: %v\n", topic, err)
 	}
 }
 

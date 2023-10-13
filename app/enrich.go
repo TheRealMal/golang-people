@@ -90,6 +90,7 @@ func enrichHandler(dataChannel <-chan BodyData, dbChannel chan<- EnrichedData, e
 		enriched, err := enrichData(&data)
 		if err != nil {
 			errorsChannel <- prepareErrorBytes[BodyData](err.Error(), &data)
+			break
 		}
 		dbChannel <- enriched
 	}
