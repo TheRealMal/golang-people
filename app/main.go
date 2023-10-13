@@ -2,9 +2,10 @@ package main
 
 import "fmt"
 
-func main() {
+func initApp() {
 	inTopic, outTopic := "FIO", "FIO_FAILED"
 	brokers := []string{"0.0.0.0:9092"}
-	go kafkaHandler(inTopic, outTopic, brokers)
+	dataChannel := make(chan BodyData)
+	go kafkaHandler(inTopic, outTopic, brokers, dataChannel)
 	fmt.Scanln()
 }

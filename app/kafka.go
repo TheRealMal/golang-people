@@ -14,10 +14,6 @@ type BodyData struct {
 	Name       *string `json:"name,omitempty"`
 	Surname    *string `json:"surname,omitempty"`
 	Patronymic *string `json:"patronymic,omitempty"`
-
-	Age         *string `json:"age,omitempty"`
-	Sex         *string `json:"sex,omitempty"`
-	Nationality *string `json:"nationality,omitempty"`
 }
 
 type ErrorData struct {
@@ -28,7 +24,7 @@ type ErrorData struct {
 // Creates Kafka consumer for FIO topic and producer for FIO_FAILED
 // If consumer receives message with wrong format producer sends
 // error message to FIO_FAILED topic
-func kafkaHandler(inTopic string, outTopic string, brokers []string) {
+func kafkaHandler(inTopic string, outTopic string, brokers []string, dataChannel chan<- BodyData) {
 	// Create new Kafka producer
 	producer, err := sarama.NewSyncProducer(brokers, nil)
 	if err != nil {
@@ -80,8 +76,8 @@ func kafkaHandler(inTopic string, outTopic string, brokers []string) {
 				})
 				sendErrorToQueue(&producer, outTopic, jsonErrorMsg)
 				continue
-
 			}
+
 		case <-sigterm:
 			fmt.Println("Received SIGINT. Shutting down.")
 			return
