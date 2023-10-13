@@ -16,69 +16,68 @@ type FIOData struct {
 	Patronymic string `json:"patronymic,omitempty"`
 }
 
-func kafkaListener(topic string, brokers []string) {
-	fmt.Println(topic, brokers)
-	// Настройки Kafka
-	kafkaConfig := sarama.NewConfig()
-	kafkaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-
-	// Создаем нового потребителя Kafka
+/*
+	Creates Kafka consumer for FIO topic and producer for FIO_FAILED
+	If consumer receives message with wrong format producer sends
+	error message to FIO_FAILED topic
+*/
+func kafkaHandler(inTopic string, outTopic string, brokers []string) {
+	// Create new Kafka producer ()
+	producer, err := sarama.NewSyncProducer(brokers, nil)
+	if err != nil {
+		log.Fatalf("Error creating Kafka producer: %v", err)
+	}
+	defer producer.Close()
+	// Create new Kafka consumer
 	consumer, err := sarama.NewConsumer(brokers, kafkaConfig)
 	if err != nil {
-		log.Fatalf("Error creating Kafka consumer: %s", err)
+		log.Fatalf("Error creating Kafka consumer: %v", err)
 	}
 	defer consumer.Close()
-
-	// Создаем потребителя для темы
+	// Create new Kafka topic consumer
 	partitionConsumer, err := consumer.ConsumePartition(topic, 0, sarama.OffsetNewest)
 	if err != nil {
-		log.Fatalf("Error creating Kafka partition consumer: %s", err)
+		log.Fatalf("Error creating Kafka partition consumer: %v", err)
 	}
 	defer partitionConsumer.Close()
 
-	// Канал для ожидания сигнала завершения
+	// Channel for termination signal
 	sigterm := make(chan os.Signal, 1)
 	signal.Notify(sigterm, os.Interrupt)
-
-	for {
-		select {
-		case msg := <-partitionConsumer.Messages():
-			// Обработка сообщения
-			fmt.Printf("Received message: %s\n", msg.Value)
-
-			// Попробуем разобрать JSON сообщения
-			var fioData FIOData
-			if err := json.Unmarshal(msg.Value, &fioData); err != nil {
-				// Если сообщение не является валидным JSON, отправляем его в очередь FIO_FAILED
-				log.Printf("Error parsing JSON: %s", err)
-				sendToFailedQueue(msg.Value, brokers)
-				continue
+	go func(){
+		for {
+			select {
+			case msg := <-partitionConsumer.Messages():
+				fmt.Printf("Received message: %s\n", msg.Value)
+				var fioData FIOData
+				if err := json.Unmarshal(msg.Value, &fioData); err != nil {
+					log.Printf("Error parsing JSON: %v", err)
+					sendToFailedQueue(&producer, outTopic, msg.Value)
+					continue
+				}
+			case <-sigterm:
+				fmt.Println("Received SIGINT. Shutting down.")
+				return
 			}
-
-			// Далее можно продолжить с обогащением и сохранением данных в БД
-		case <-sigterm:
-			// Завершение приложения при получении сигнала завершения
-			fmt.Println("Received SIGINT. Shutting down.")
-			return
 		}
 	}
 }
 
-func sendToFailedQueue(data []byte, brokers []string) {
+func sendFailToQueue(producer *SyncProducer, topic string, data []byte) {
 	// Создаем продюсера для отправки сообщений в очередь FIO_FAILED
 	failedProducer, err := sarama.NewSyncProducer(brokers, nil)
 	if err != nil {
-		log.Fatalf("Error creating Kafka producer: %s", err)
+		log.Fatalf("Error creating Kafka producer: %v", err)
 	}
 	defer failedProducer.Close()
 
-	// Создаем сообщение и отправляем его в очередь FIO_FAILED
+	// Create message for FIO_FAILED topic
 	failedMsg := &sarama.ProducerMessage{
-		Topic: "FIO_FAILED",
+		Topic: topic,
 		Value: sarama.StringEncoder(string(data)),
 	}
 
 	if _, _, err := failedProducer.SendMessage(failedMsg); err != nil {
-		log.Printf("Failed to send message to FIO_FAILED queue: %s", err)
+		log.Printf("Failed to send message to %s queue: %v", topic, err)
 	}
 }
