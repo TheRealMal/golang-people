@@ -11,10 +11,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func serverInit(ctx context.Context, db *pgx.Conn) {
+type EnrichedDataWithID struct {
+	EnrichedData
+	ID int
+}
+
+func serverInit(ctx context.Context, db *pgx.Conn, dbChannel chan<- EnrichedData) {
 	ginApp := gin.Default()
 	ginApp.GET("/enriched-data/", getEnrichedData(db))
-	ginApp.POST("/enriched-data/", addEnrichedData(db))
+	ginApp.POST("/enriched-data/", addEnrichedData(dbChannel))
+	ginApp.DELETE("/enriched-data/:id", delEnrichedData(db))
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: ginApp,
@@ -25,9 +31,39 @@ func serverInit(ctx context.Context, db *pgx.Conn) {
 	fmt.Printf("Server stopped.")
 }
 
-func addEnrichedData(db *pgx.Conn) gin.HandlerFunc {
+func delEnrichedData(db *pgx.Conn) gin.HandlerFunc {
 	fn := func(c *gin.Context) {
+		id := c.Param("id")
+		if _, err := strconv.Atoi(id); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Provided ID type is not int"})
+			fmt.Printf("%v\n", err)
+			return
+		}
+		query := "DELETE FROM enriched_data WHERE id = $1"
+		res, err := db.Exec(context.Background(), query, id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete row", "message": err.Error()})
+			fmt.Printf("%v\n", err)
+			return
+		}
+		if res.RowsAffected() == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Provided ID not found"})
+			fmt.Printf("%v\n", err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	}
+	return gin.HandlerFunc(fn)
+}
 
+func addEnrichedData(dbChannel chan<- EnrichedData) gin.HandlerFunc {
+	fn := func(c *gin.Context) {
+		requestBody := new(EnrichedData)
+		if err := c.Bind(requestBody); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "message": err.Error()})
+			return
+		}
+		dbChannel <- *requestBody
 	}
 	return gin.HandlerFunc(fn)
 }
@@ -90,11 +126,10 @@ func getEnrichedData(db *pgx.Conn) gin.HandlerFunc {
 		}
 		defer rows.Close()
 
-		results := []EnrichedData{}
+		results := []EnrichedDataWithID{}
 		for rows.Next() {
-			var data EnrichedData
-			var id int
-			err := rows.Scan(&id, &data.Name, &data.Surname, &data.Patronymic, &data.Age, &data.Gender, &data.Nationality)
+			var data EnrichedDataWithID
+			err := rows.Scan(&data.ID, &data.Name, &data.Surname, &data.Patronymic, &data.Age, &data.Gender, &data.Nationality)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan rows"})
 				return

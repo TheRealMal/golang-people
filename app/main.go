@@ -55,7 +55,7 @@ func initApp() {
 	}()
 	go func() {
 		defer wg.Done()
-		serverInit(ctx, db)
+		serverInit(ctx, db, dbChannel)
 	}()
 	<-terminationChannel
 	fmt.Printf("Received termination signal; Shutting down...\n")
