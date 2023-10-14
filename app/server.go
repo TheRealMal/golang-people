@@ -21,6 +21,7 @@ func serverInit(ctx context.Context, db *pgx.Conn, dbChannel chan<- EnrichedData
 	ginApp.GET("/enriched-data/", getEnrichedData(db))
 	ginApp.POST("/enriched-data/", addEnrichedData(dbChannel))
 	ginApp.DELETE("/enriched-data/:id", delEnrichedData(db))
+	ginApp.PUT("/enriched-data/:id", updateEnrichedData(db))
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: ginApp,
@@ -29,6 +30,56 @@ func serverInit(ctx context.Context, db *pgx.Conn, dbChannel chan<- EnrichedData
 	<-ctx.Done()
 	server.Shutdown(context.Background())
 	fmt.Printf("Server stopped.")
+}
+
+func parseUpdateRequestParams(c *gin.Context) ([]string, []interface{}) {
+	argsToCheck := []string{"Name", "Surname", "Patronymic", "Age", "Gender", "Nationality"}
+	argsString := []string{}
+	args := []interface{}{}
+	for _, key := range argsToCheck {
+		value := c.DefaultQuery(key, "")
+		if value != "" {
+			queryBuilder := strings.Builder{}
+			queryBuilder.WriteString(key)
+			queryBuilder.WriteString(" = $")
+			args = append(args, value)
+			queryBuilder.WriteString(strconv.Itoa(len(args)))
+			argsString = append(argsString, queryBuilder.String())
+		}
+	}
+	return argsString, args
+}
+
+func updateEnrichedData(db *pgx.Conn) gin.HandlerFunc {
+	fn := func(c *gin.Context) {
+		id := c.Param("id")
+		if _, err := strconv.Atoi(id); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Provided ID type is not int"})
+			fmt.Printf("%v\n", err)
+			return
+		}
+
+		argsString, args := parseUpdateRequestParams(c)
+		if len(argsString) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No parameters passed"})
+			return
+		}
+
+		args = append(args, id)
+		query := "UPDATE enriched_data SET " + strings.Join(argsString, ", ") + " WHERE id = $" + strconv.Itoa(len(args))
+		res, err := db.Exec(context.Background(), query, args...)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update row", "message": err.Error()})
+			fmt.Printf("%v\n", err)
+			return
+		}
+		if res.RowsAffected() == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Provided ID not found"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	}
+	return gin.HandlerFunc(fn)
 }
 
 func delEnrichedData(db *pgx.Conn) gin.HandlerFunc {
@@ -48,7 +99,6 @@ func delEnrichedData(db *pgx.Conn) gin.HandlerFunc {
 		}
 		if res.RowsAffected() == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Provided ID not found"})
-			fmt.Printf("%v\n", err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
