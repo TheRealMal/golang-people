@@ -3,33 +3,64 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/joho/godotenv"
 )
 
+const workersNumber = 5
+
 func initApp() {
-	// os.Getenv("DATABASE_URL")
-	databaseURL := "postgresql://postgres:123456@localhost:5432/EnrichedPeople?sslmode=disable"
+	godotenv.Load(".env")
+	databaseURL := os.Getenv("DATABASE_URL")
 	db, err := pgx.Connect(context.Background(), databaseURL)
 	if err != nil {
-		fmt.Printf("Failed to connect to db: %v\n", err)
-		return
+		log.Fatalf("Failed to connect to db: %v\n", err)
 	}
 	defer db.Close(context.Background())
 
-	inTopic, outTopic := "FIO", "FIO_FAILED"
-	brokers := []string{"0.0.0.0:9092"}
+	inTopic, outTopic := os.Getenv("INPUT_TOPIC"), os.Getenv("OUTPUT_TOPIC")
+	brokers := []string{os.Getenv("KAFKA_BROKER")}
 
 	dataChannel := make(chan BodyData, 1)
 	dbChannel := make(chan EnrichedData, 1)
 	errorsChannel := make(chan []byte, 1)
 
-	go databaseListener(dbChannel, db)
-	go enrichListener(dataChannel, dbChannel, errorsChannel)
-	go kafkaErrorsHandler(brokers, outTopic, errorsChannel)
-	go kafkaHandler(brokers, inTopic, dataChannel, errorsChannel)
-	go serverInit(db)
-	fmt.Scanln()
+	// Termination part
+	terminationChannel := make(chan os.Signal)
+	signal.Notify(terminationChannel, os.Interrupt)
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+	wg.Add(5)
+
+	go func() {
+		defer wg.Done()
+		databaseListener(ctx, dbChannel, db)
+	}()
+	go func() {
+		defer wg.Done()
+		enrichListener(ctx, dataChannel, dbChannel, errorsChannel)
+	}()
+	go func() {
+		defer wg.Done()
+		kafkaErrorsHandler(ctx, brokers, outTopic, errorsChannel)
+	}()
+	go func() {
+		defer wg.Done()
+		kafkaHandler(ctx, brokers, inTopic, dataChannel, errorsChannel)
+	}()
+	go func() {
+		defer wg.Done()
+		serverInit(ctx, db)
+	}()
+	<-terminationChannel
+	fmt.Printf("Received termination signal; Shutting down...\n")
+	cancelCtx()
+	wg.Wait()
 }
 
 func main() {

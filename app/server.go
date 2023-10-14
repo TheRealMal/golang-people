@@ -11,15 +11,17 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func serverInit(db *pgx.Conn) {
-	r := gin.Default()
-
-	r.GET("/enriched-data/", getEnrichedData(db))
-	r.POST("/enriched-data", addEnrichedData)
-	r.DELETE("/enriched-data/:id", deleteEnrichedData)
-	r.PUT("/enriched-data/:id", updateEnrichedData)
-
-	r.Run(":8080")
+func serverInit(ctx context.Context, db *pgx.Conn) {
+	ginApp := gin.Default()
+	ginApp.GET("/enriched-data/", getEnrichedData(db))
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: ginApp,
+	}
+	go server.ListenAndServe()
+	<-ctx.Done()
+	server.Shutdown(context.Background())
+	fmt.Printf("Server stopped.")
 }
 
 func getEnrichedData(db *pgx.Conn) gin.HandlerFunc {
@@ -47,14 +49,14 @@ func getEnrichedData(db *pgx.Conn) gin.HandlerFunc {
 			query.WriteString(strconv.Itoa(len(args)))
 		}
 		if gender != "" {
+			args = append(args, gender)
 			query.WriteString(" AND gender = $")
 			query.WriteString(strconv.Itoa(len(args)))
-			args = append(args, gender)
 		}
 		if nationality != "" {
+			args = append(args, nationality)
 			query.WriteString(" AND nationality = $")
 			query.WriteString(strconv.Itoa(len(args)))
-			args = append(args, nationality)
 		}
 		args = append(args, limit)
 		query.WriteString(" LIMIT $")
@@ -71,7 +73,7 @@ func getEnrichedData(db *pgx.Conn) gin.HandlerFunc {
 		}
 		defer rows.Close()
 
-		var results []EnrichedData
+		results := []EnrichedData{}
 		for rows.Next() {
 			var data EnrichedData
 			var id int
@@ -82,19 +84,7 @@ func getEnrichedData(db *pgx.Conn) gin.HandlerFunc {
 			}
 			results = append(results, data)
 		}
-
 		c.JSON(http.StatusOK, results)
 	}
 	return gin.HandlerFunc(fn)
-}
-
-func addEnrichedData(c *gin.Context) {
-}
-
-func deleteEnrichedData(c *gin.Context) {
-	//id := c.Param("id")
-}
-
-func updateEnrichedData(c *gin.Context) {
-	//id := c.Param("id")
 }

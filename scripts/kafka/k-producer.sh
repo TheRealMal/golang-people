@@ -1,1 +1,1 @@
-kafka-console-producer --broker-list 0.0.0.0:9092 --topic FIO
+kafka-console-producer --broker-list $KAFKA_BROKER --topic $INPUT_TOPIC

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 )
 
@@ -84,22 +86,19 @@ func enrichData(bodyData *BodyData) (EnrichedData, error) {
 }
 
 // Waits for new enriched data in channel
-func enrichHandler(dataChannel <-chan BodyData, dbChannel chan<- EnrichedData, errorsChannel chan<- []byte) {
-	select {
-	case data := <-dataChannel:
-		enriched, err := enrichData(&data)
-		if err != nil {
-			errorsChannel <- prepareErrorBytes[BodyData](err.Error(), &data)
-			break
-		}
-		dbChannel <- enriched
-	}
-}
-
-// Just loops enrichHandler
-// Done to split functions for proper testing
-func enrichListener(dataChannel <-chan BodyData, dbChannel chan<- EnrichedData, errorsChannel chan<- []byte) {
+func enrichListener(ctx context.Context, dataChannel <-chan BodyData, dbChannel chan<- EnrichedData, errorsChannel chan<- []byte) {
 	for {
-		enrichHandler(dataChannel, dbChannel, errorsChannel)
+		select {
+		case data := <-dataChannel:
+			enriched, err := enrichData(&data)
+			if err != nil {
+				errorsChannel <- prepareErrorBytes[BodyData](err.Error(), &data)
+				break
+			}
+			dbChannel <- enriched
+		case <-ctx.Done():
+			fmt.Printf("Enriched data listener stopped.\n")
+			return
+		}
 	}
 }

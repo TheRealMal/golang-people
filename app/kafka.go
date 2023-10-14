@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -24,7 +25,7 @@ type ErrorData struct {
 // Creates Kafka consumer for FIO topic and producer for FIO_FAILED
 // If consumer receives message with wrong format producer sends
 // error message to FIO_FAILED topic
-func kafkaHandler(brokers []string, topic string, dataChannel chan<- BodyData, errorsChannel chan<- []byte) {
+func kafkaHandler(ctx context.Context, brokers []string, topic string, dataChannel chan<- BodyData, errorsChannel chan<- []byte) {
 	// Create new Kafka consumer
 	consumer, err := sarama.NewConsumer(brokers, nil)
 	if err != nil {
@@ -60,8 +61,8 @@ func kafkaHandler(brokers []string, topic string, dataChannel chan<- BodyData, e
 				bodyFIO.Patronymic = &tmp
 			}
 			dataChannel <- bodyFIO
-		case <-sigterm:
-			fmt.Printf("Received SIGINT. Shutting down.\n")
+		case <-ctx.Done():
+			fmt.Printf("Kafka queue listener stopped.\n")
 			return
 		}
 	}
@@ -92,7 +93,7 @@ func sendErrorToQueue(producer *sarama.SyncProducer, topic string, data []byte) 
 
 // Listens error channel
 // Produces message to provided Kafka topic
-func kafkaErrorsHandler(brokers []string, topic string, errorsChannel <-chan []byte) {
+func kafkaErrorsHandler(ctx context.Context, brokers []string, topic string, errorsChannel <-chan []byte) {
 	producer, err := sarama.NewSyncProducer(brokers, nil)
 	if err != nil {
 		log.Fatalf("Error creating Kafka producer: %v", err)
@@ -102,6 +103,9 @@ func kafkaErrorsHandler(brokers []string, topic string, errorsChannel <-chan []b
 		select {
 		case msg := <-errorsChannel:
 			sendErrorToQueue(&producer, topic, msg)
+		case <-ctx.Done():
+			fmt.Printf("Kafka errors listener stopped.\n")
+			return
 		}
 	}
 }

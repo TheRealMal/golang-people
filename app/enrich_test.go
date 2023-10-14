@@ -1,8 +1,8 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,14 +17,11 @@ func TestGoodExample(t *testing.T) {
 	}
 
 	testChIn, testChOut, testChErr := make(chan BodyData), make(chan EnrichedData), make(chan []byte)
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		enrichHandler(testChIn, testChOut, testChErr)
-	}()
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	go enrichListener(ctx, testChIn, testChOut, testChErr)
 	testChIn <- testBody
 	res := <-testChOut
+	cancelCtx()
 	assert.Equal(t, 42, res.Age)
 	assert.Equal(t, "male", res.Gender)
 	assert.Equal(t, "UA", res.Nationality)
@@ -39,14 +36,11 @@ func TestBadExample(t *testing.T) {
 	}
 
 	testChIn, testChOut, testChErr := make(chan BodyData), make(chan EnrichedData), make(chan []byte)
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		enrichHandler(testChIn, testChOut, testChErr)
-	}()
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	go enrichListener(ctx, testChIn, testChOut, testChErr)
 	testChIn <- testBody
 	res := <-testChErr
+	cancelCtx()
 	var testError ErrorData
 	if err := json.Unmarshal(res, &testError); err == nil {
 		assert.Equal(t, "Provided FIO does not exist", *testError.ErrorMsg)

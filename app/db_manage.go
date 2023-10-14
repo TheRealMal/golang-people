@@ -18,13 +18,16 @@ func insertEnrichedData(db *pgx.Conn, data *EnrichedData) error {
 	return nil
 }
 
-func databaseListener(dbChannel <-chan EnrichedData, db *pgx.Conn) {
+func databaseListener(ctx context.Context, dbChannel <-chan EnrichedData, db *pgx.Conn) {
 	for {
 		select {
 		case data := <-dbChannel:
 			if err := insertEnrichedData(db, &data); err != nil {
 				fmt.Printf("Failed to insert row: %v\n", err)
 			}
+		case <-ctx.Done():
+			fmt.Printf("Database listener stopped.\n")
+			return
 		}
 	}
 }

@@ -1,1 +1,1 @@
-kafka-console-consumer --bootstrap-server 0.0.0.0:9092 --topic FIO_FAILED
+kafka-console-consumer --bootstrap-server $KAFKA_BROKER --topic $INPUT_TOPIC
