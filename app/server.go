@@ -14,6 +14,7 @@ import (
 func serverInit(ctx context.Context, db *pgx.Conn) {
 	ginApp := gin.Default()
 	ginApp.GET("/enriched-data/", getEnrichedData(db))
+	ginApp.POST("/enriched-data/", addEnrichedData(db))
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: ginApp,
@@ -22,6 +23,49 @@ func serverInit(ctx context.Context, db *pgx.Conn) {
 	<-ctx.Done()
 	server.Shutdown(context.Background())
 	fmt.Printf("Server stopped.")
+}
+
+func addEnrichedData(db *pgx.Conn) gin.HandlerFunc {
+	fn := func(c *gin.Context) {
+
+	}
+	return gin.HandlerFunc(fn)
+}
+
+func sqlCheckAndWriteArg(arg string, argName string, args *[]interface{}, queryBuilder *strings.Builder) {
+	if arg == "" {
+		return
+	}
+	*args = append(*args, arg)
+	queryBuilder.WriteString(" AND ")
+	queryBuilder.WriteString(argName)
+	queryBuilder.WriteString(" = $")
+	queryBuilder.WriteString(strconv.Itoa(len(*args)))
+}
+
+func sqlWriteArg(arg int, argName string, args *[]interface{}, queryBuilder *strings.Builder) {
+	*args = append(*args, arg)
+	queryBuilder.WriteString(" ")
+	queryBuilder.WriteString(argName)
+	queryBuilder.WriteString(" $")
+	queryBuilder.WriteString(strconv.Itoa(len(*args)))
+}
+
+func generateGetQuery(age string, gender string, nationality string, pageInt int) (string, []interface{}) {
+	limit := 10
+	offset := (pageInt - 1) * limit
+
+	queryBuilder := strings.Builder{}
+	queryBuilder.WriteString("SELECT * FROM enriched_data WHERE 1=1")
+	args := []interface{}{}
+
+	sqlCheckAndWriteArg(age, "age", &args, &queryBuilder)
+	sqlCheckAndWriteArg(gender, "gender", &args, &queryBuilder)
+	sqlCheckAndWriteArg(nationality, "nationality", &args, &queryBuilder)
+	sqlWriteArg(limit, "LIMIT", &args, &queryBuilder)
+	sqlWriteArg(offset, "OFFSET", &args, &queryBuilder)
+
+	return queryBuilder.String(), args
 }
 
 func getEnrichedData(db *pgx.Conn) gin.HandlerFunc {
@@ -37,35 +81,8 @@ func getEnrichedData(db *pgx.Conn) gin.HandlerFunc {
 			return
 		}
 
-		limit := 10
-		offset := (pageInt - 1) * limit
-
-		query := strings.Builder{}
-		query.WriteString("SELECT * FROM enriched_data WHERE 1=1")
-		args := []interface{}{}
-		if age != "" {
-			args = append(args, age)
-			query.WriteString(" AND age = $")
-			query.WriteString(strconv.Itoa(len(args)))
-		}
-		if gender != "" {
-			args = append(args, gender)
-			query.WriteString(" AND gender = $")
-			query.WriteString(strconv.Itoa(len(args)))
-		}
-		if nationality != "" {
-			args = append(args, nationality)
-			query.WriteString(" AND nationality = $")
-			query.WriteString(strconv.Itoa(len(args)))
-		}
-		args = append(args, limit)
-		query.WriteString(" LIMIT $")
-		query.WriteString(strconv.Itoa(len(args)))
-		args = append(args, offset)
-		query.WriteString(" OFFSET $")
-		query.WriteString(strconv.Itoa(len(args)))
-		fmt.Println(query.String())
-		rows, err := db.Query(context.Background(), query.String(), args...)
+		query, queryArgs := generateGetQuery(age, gender, nationality, pageInt)
+		rows, err := db.Query(context.Background(), query, queryArgs...)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query database"})
 			fmt.Printf("%v\n", err)
