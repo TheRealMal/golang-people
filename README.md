@@ -16,7 +16,7 @@ bash scripts/kafka/k-consumer.sh # Run Kafka consumer for topic from .env (FIO_F
 ```
 ### REST API
 ```sh
-go run app/...
+go run app/app
 ```
 ### GraphQL API
 ```sh

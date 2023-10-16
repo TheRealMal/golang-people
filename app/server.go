@@ -17,15 +17,15 @@ type EnrichedDataWithID struct {
 }
 
 func serverInit(ctx context.Context, db *pgx.Conn, dbChannel chan<- EnrichedData) {
-	ginApp := gin.Default()
-	ginApp.GET("/enriched-data/", getEnrichedData(db))
-	ginApp.POST("/enriched-data/", addEnrichedData(dbChannel))
-	ginApp.DELETE("/enriched-data/:id", delEnrichedData(db))
-	ginApp.PUT("/enriched-data/:id", updateEnrichedData(db))
+	router := gin.Default()
+	router.GET("/enriched-data/", getEnrichedData(db))
+	router.POST("/enriched-data/", addEnrichedData(dbChannel))
+	router.DELETE("/enriched-data/:id", delEnrichedData(db))
+	router.PUT("/enriched-data/:id", updateEnrichedData(db))
 
 	server := &http.Server{
 		Addr:    ":8080",
-		Handler: ginApp,
+		Handler: router,
 	}
 	go server.ListenAndServe()
 
