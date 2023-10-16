@@ -1,5 +1,5 @@
 # Golang people
-## DEV
+## Development section
 ### SQL Migration
 ```sh
 bash scripts/migration/go-get-psql.sh # Install go migrate for postgres
