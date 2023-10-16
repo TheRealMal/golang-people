@@ -185,7 +185,6 @@ func addEnrichedData(dbChannel chan<- EnrichedData, rdb *redis.Client) gin.Handl
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "message": err.Error()})
 			return
 		}
-		rdb.FlushDB(context.Background())
 		dbChannel <- *requestBody
 	}
 	return gin.HandlerFunc(fn)

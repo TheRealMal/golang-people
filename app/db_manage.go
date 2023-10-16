@@ -25,9 +25,9 @@ func databaseListener(ctx context.Context, dbChannel <-chan EnrichedData, db *pg
 		case data := <-dbChannel:
 			if err := insertEnrichedData(db, &data); err != nil {
 				fmt.Printf("Failed to insert row: %v\n", err)
-				rdb.FlushDB(context.Background())
 				break
 			}
+			rdb.FlushDB(context.Background())
 			l.Println("Successfully inserted data to db.")
 		case <-ctx.Done():
 			l.Printf("Database listener stopped.\n")
