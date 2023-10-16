@@ -39,6 +39,12 @@ func initApp() {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 	wg.Add(5)
+	defer func() {
+		<-terminationChannel
+		l.Println("Received termination signal; Shutting down...")
+		cancelCtx()
+		wg.Wait()
+	}()
 
 	go func() {
 		defer wg.Done()
@@ -65,10 +71,6 @@ func initApp() {
 		l.Println("Starting server goroutine")
 		serverInit(ctx, db, dbChannel)
 	}()
-	<-terminationChannel
-	l.Println("Received termination signal; Shutting down...")
-	cancelCtx()
-	wg.Wait()
 }
 
 func main() {
