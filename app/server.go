@@ -3,15 +3,18 @@ package main
 import (
 	"app/graph"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/redis/go-redis/v9"
 )
 
 type EnrichedDataWithID struct {
@@ -19,13 +22,13 @@ type EnrichedDataWithID struct {
 	ID int
 }
 
-func serverInit(ctx context.Context, db *pgx.Conn, dbChannel chan<- EnrichedData) {
+func serverInit(ctx context.Context, db *pgx.Conn, rdb *redis.Client, dbChannel chan<- EnrichedData) {
 	router := gin.Default()
 
-	router.GET("/enriched-data/", getEnrichedData(db))
-	router.POST("/enriched-data/", addEnrichedData(dbChannel))
-	router.DELETE("/enriched-data/:id", delEnrichedData(db))
-	router.PUT("/enriched-data/:id", updateEnrichedData(db))
+	router.GET("/enriched-data/", checkCache(rdb), getEnrichedData(db, rdb))
+	router.POST("/enriched-data/", addEnrichedData(dbChannel, rdb))
+	router.DELETE("/enriched-data/:id", delEnrichedData(db, rdb))
+	router.PUT("/enriched-data/:id", updateEnrichedData(db, rdb))
 
 	router.POST("/query", graphqlHandler())
 	router.GET("/", playgroundHandler())
@@ -39,6 +42,44 @@ func serverInit(ctx context.Context, db *pgx.Conn, dbChannel chan<- EnrichedData
 	<-ctx.Done()
 	server.Shutdown(context.Background())
 	l.Println("Server stopped.")
+}
+
+func checkCache(rdb *redis.Client) gin.HandlerFunc {
+	fn := func(c *gin.Context) {
+		cacheKey := strings.Builder{}
+		cacheKey.WriteString(c.DefaultQuery("age", ""))
+		cacheKey.WriteString(c.DefaultQuery("gender", ""))
+		cacheKey.WriteString(c.DefaultQuery("nationality", ""))
+		cacheKey.WriteString(c.DefaultQuery("page", "1"))
+		val, err := rdb.Get(context.Background(), cacheKey.String()).Bytes()
+		if err != nil {
+			return
+		}
+		response := []EnrichedDataWithID{}
+		json.Unmarshal(val, &response)
+		c.JSON(http.StatusOK, response)
+		c.Abort()
+	}
+	return gin.HandlerFunc(fn)
+}
+
+func cacheResponse(a *string, g *string, n *string, p *string, response *[]EnrichedDataWithID, rdb *redis.Client) error {
+	cacheKey := strings.Builder{}
+	cacheKey.WriteString(*a)
+	cacheKey.WriteString(*g)
+	cacheKey.WriteString(*n)
+	cacheKey.WriteString(*p)
+	resultsJSON, err := json.Marshal(*response)
+	if err != nil {
+		l.Printf("Failed to marshal data: %v\n", err)
+		return err
+	}
+	cacheErr := rdb.Set(context.Background(), cacheKey.String(), resultsJSON, 360*time.Second).Err()
+	if cacheErr != nil {
+		l.Printf("Something went wrong while caching: %v\n", cacheErr)
+		return cacheErr
+	}
+	return nil
 }
 
 func graphqlHandler() gin.HandlerFunc {
@@ -79,7 +120,7 @@ func parseUpdateRequestParams(c *gin.Context) ([]string, []interface{}) {
 	return argsString, args
 }
 
-func updateEnrichedData(db *pgx.Conn) gin.HandlerFunc {
+func updateEnrichedData(db *pgx.Conn, rdb *redis.Client) gin.HandlerFunc {
 	fn := func(c *gin.Context) {
 		id := c.Param("id")
 		if _, err := strconv.Atoi(id); err != nil {
@@ -106,12 +147,13 @@ func updateEnrichedData(db *pgx.Conn) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Provided ID not found"})
 			return
 		}
+		rdb.FlushDB(context.Background())
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	}
 	return gin.HandlerFunc(fn)
 }
 
-func delEnrichedData(db *pgx.Conn) gin.HandlerFunc {
+func delEnrichedData(db *pgx.Conn, rdb *redis.Client) gin.HandlerFunc {
 	fn := func(c *gin.Context) {
 		id := c.Param("id")
 		if _, err := strconv.Atoi(id); err != nil {
@@ -130,18 +172,20 @@ func delEnrichedData(db *pgx.Conn) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Provided ID not found"})
 			return
 		}
+		rdb.FlushDB(context.Background())
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	}
 	return gin.HandlerFunc(fn)
 }
 
-func addEnrichedData(dbChannel chan<- EnrichedData) gin.HandlerFunc {
+func addEnrichedData(dbChannel chan<- EnrichedData, rdb *redis.Client) gin.HandlerFunc {
 	fn := func(c *gin.Context) {
 		requestBody := new(EnrichedData)
 		if err := c.Bind(requestBody); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "message": err.Error()})
 			return
 		}
+		rdb.FlushDB(context.Background())
 		dbChannel <- *requestBody
 	}
 	return gin.HandlerFunc(fn)
@@ -183,7 +227,7 @@ func generateGetQuery(age string, gender string, nationality string, pageInt int
 	return queryBuilder.String(), args
 }
 
-func getEnrichedData(db *pgx.Conn) gin.HandlerFunc {
+func getEnrichedData(db *pgx.Conn, rdb *redis.Client) gin.HandlerFunc {
 	fn := func(c *gin.Context) {
 		age := c.DefaultQuery("age", "")
 		gender := c.DefaultQuery("gender", "")
@@ -197,6 +241,7 @@ func getEnrichedData(db *pgx.Conn) gin.HandlerFunc {
 		}
 
 		query, queryArgs := generateGetQuery(age, gender, nationality, pageInt)
+
 		rows, err := db.Query(context.Background(), query, queryArgs...)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query database"})
@@ -215,6 +260,8 @@ func getEnrichedData(db *pgx.Conn) gin.HandlerFunc {
 			}
 			results = append(results, data)
 		}
+
+		cacheResponse(&age, &gender, &nationality, &page, &results, rdb)
 		c.JSON(http.StatusOK, results)
 	}
 	return gin.HandlerFunc(fn)

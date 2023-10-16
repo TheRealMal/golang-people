@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -25,6 +26,11 @@ func initApp() {
 		l.Fatalf("Failed to connect to db: %v\n", err)
 	}
 	defer db.Close(context.Background())
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     os.Getenv("REDIS"),
+		Password: "",
+	})
 
 	inTopic, outTopic := os.Getenv("INPUT_TOPIC"), os.Getenv("OUTPUT_TOPIC")
 	brokers := []string{os.Getenv("KAFKA_BROKER")}
@@ -49,7 +55,7 @@ func initApp() {
 	go func() {
 		defer wg.Done()
 		l.Println("Starting database goroutine")
-		databaseListener(ctx, dbChannel, db)
+		databaseListener(ctx, dbChannel, db, rdb)
 	}()
 	go func() {
 		defer wg.Done()
@@ -69,7 +75,7 @@ func initApp() {
 	go func() {
 		defer wg.Done()
 		l.Println("Starting server goroutine")
-		serverInit(ctx, db, dbChannel)
+		serverInit(ctx, db, rdb, dbChannel)
 	}()
 }
 

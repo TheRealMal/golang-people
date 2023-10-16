@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/redis/go-redis/v9"
 )
 
 func insertEnrichedData(db *pgx.Conn, data *EnrichedData) error {
@@ -18,12 +19,13 @@ func insertEnrichedData(db *pgx.Conn, data *EnrichedData) error {
 	return nil
 }
 
-func databaseListener(ctx context.Context, dbChannel <-chan EnrichedData, db *pgx.Conn) {
+func databaseListener(ctx context.Context, dbChannel <-chan EnrichedData, db *pgx.Conn, rdb *redis.Client) {
 	for {
 		select {
 		case data := <-dbChannel:
 			if err := insertEnrichedData(db, &data); err != nil {
 				fmt.Printf("Failed to insert row: %v\n", err)
+				rdb.FlushDB(context.Background())
 				break
 			}
 			l.Println("Successfully inserted data to db.")

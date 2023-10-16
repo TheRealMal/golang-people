@@ -1,5 +1,5 @@
 # Golang people
-Service that listens Kafka topic for new people and adds them to PostgreSQL database. All failed requests being redirected to another Kafka topic. Database can also be accessed through REST/GraphQL API (Get, add, update or delete people).
+Service that listens Kafka topic for new people and adds them to PostgreSQL database. All failed requests being redirected to another Kafka topic. Database can also be accessed through REST/GraphQL API (Get, add, update or delete people). REST API has Redis cache.
 
 ## Development section
 ### SQL Migration
@@ -52,7 +52,7 @@ go run app/app
     - [x] Для добавления новых людей
     - [x] Для удаления по идентификатору
     - [x] Для изменения сущности
-- [ ] Предусмотреть кэширование данных в Redis
+- [x] Предусмотреть кэширование данных в Redis (Не добавил для graphql и очистку при обновлении бд через кафку)
 - [x] Покрыть код логами
 - [ ] Покрыть бизнес-логику unit-тестами
 - [x] Вынести все конфигурационные данные в .env
