@@ -1,7 +1,23 @@
 # Golang people
 ## DEV
-### GrapgQL
-```console
+### SQL Migration
+```sh
+bash scripts/migration/go-get-psql.sh # Install go migrate for postgres
+bash scripts/migration/migrate.sh # Migrate tables from scripts/migration/migrations
+```
+### Kafka
+```sh
+bash scripts/kafka/zookeeper.sh # Run zookeeper to run Kafka
+bash scripts/kafka/kafka.sh # Run Kafka
+bash scripts/kafka/k-producer.sh # Run Kafka producer for topic from .env (FIO)
+bash scripts/kafka/k-consumer.sh # Run Kafka consumer for topic from .env (FIO_FAILED)
+```
+### REST API
+```sh
+go run app/...
+```
+### GrapgQL API
+```sh
 go run github.com/99designs/gqlgen init # Init files
 go run github.com/99designs/gqlgen generate # Generate when schema written
 go run ./gserver.go # Run graphql server
@@ -28,7 +44,7 @@ go run ./gserver.go # Run graphql server
     - [x] Для добавления новых людей
     - [x] Для удаления по идентификатору
     - [x] Для изменения сущности
-- [ ] Выставить GraphQL методы аналогичные п. 5
+- [x] Выставить GraphQL методы аналогичные п. 5
     - [x] Для получения данных с различными фильтрами и пагинацией
     - [x] Для добавления новых людей
     - [x] Для удаления по идентификатору
