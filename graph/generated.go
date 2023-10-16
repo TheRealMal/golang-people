@@ -69,9 +69,9 @@ type ComplexityRoot struct {
 }
 
 type MutationResolver interface {
-	AddEnrichedData(ctx context.Context, input model.NewEnrichedData) (*model.EnrichedData, error)
-	DelEnrichedData(ctx context.Context, id string) (*string, error)
-	UpdateEnrichedData(ctx context.Context, id string, input model.UpdateEnrichedData) (*model.EnrichedData, error)
+	AddEnrichedData(ctx context.Context, input model.NewEnrichedData) (string, error)
+	DelEnrichedData(ctx context.Context, id string) (string, error)
+	UpdateEnrichedData(ctx context.Context, id string, input model.UpdateEnrichedData) (string, error)
 }
 type QueryResolver interface {
 	EnrichedData(ctx context.Context, page *int, age *string, gender *string, nationality *string) ([]*model.EnrichedData, error)
@@ -794,11 +794,14 @@ func (ec *executionContext) _Mutation_addEnrichedData(ctx context.Context, field
 		return graphql.Null
 	}
 	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.EnrichedData)
+	res := resTmp.(string)
 	fc.Result = res
-	return ec.marshalOEnrichedData2ᚖappᚋgraphᚋmodelᚐEnrichedData(ctx, field.Selections, res)
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Mutation_addEnrichedData(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -808,23 +811,7 @@ func (ec *executionContext) fieldContext_Mutation_addEnrichedData(ctx context.Co
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "id":
-				return ec.fieldContext_EnrichedData_id(ctx, field)
-			case "name":
-				return ec.fieldContext_EnrichedData_name(ctx, field)
-			case "surname":
-				return ec.fieldContext_EnrichedData_surname(ctx, field)
-			case "patronymic":
-				return ec.fieldContext_EnrichedData_patronymic(ctx, field)
-			case "age":
-				return ec.fieldContext_EnrichedData_age(ctx, field)
-			case "gender":
-				return ec.fieldContext_EnrichedData_gender(ctx, field)
-			case "nationality":
-				return ec.fieldContext_EnrichedData_nationality(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type EnrichedData", field.Name)
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	defer func() {
@@ -862,11 +849,14 @@ func (ec *executionContext) _Mutation_delEnrichedData(ctx context.Context, field
 		return graphql.Null
 	}
 	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
 		return graphql.Null
 	}
-	res := resTmp.(*string)
+	res := resTmp.(string)
 	fc.Result = res
-	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Mutation_delEnrichedData(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -914,11 +904,14 @@ func (ec *executionContext) _Mutation_updateEnrichedData(ctx context.Context, fi
 		return graphql.Null
 	}
 	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.EnrichedData)
+	res := resTmp.(string)
 	fc.Result = res
-	return ec.marshalOEnrichedData2ᚖappᚋgraphᚋmodelᚐEnrichedData(ctx, field.Selections, res)
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Mutation_updateEnrichedData(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -928,23 +921,7 @@ func (ec *executionContext) fieldContext_Mutation_updateEnrichedData(ctx context
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "id":
-				return ec.fieldContext_EnrichedData_id(ctx, field)
-			case "name":
-				return ec.fieldContext_EnrichedData_name(ctx, field)
-			case "surname":
-				return ec.fieldContext_EnrichedData_surname(ctx, field)
-			case "patronymic":
-				return ec.fieldContext_EnrichedData_patronymic(ctx, field)
-			case "age":
-				return ec.fieldContext_EnrichedData_age(ctx, field)
-			case "gender":
-				return ec.fieldContext_EnrichedData_gender(ctx, field)
-			case "nationality":
-				return ec.fieldContext_EnrichedData_nationality(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type EnrichedData", field.Name)
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	defer func() {
@@ -3176,14 +3153,23 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_addEnrichedData(ctx, field)
 			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "delEnrichedData":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_delEnrichedData(ctx, field)
 			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "updateEnrichedData":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_updateEnrichedData(ctx, field)
 			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

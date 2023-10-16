@@ -7,33 +7,80 @@ package graph
 import (
 	"app/graph/model"
 	"context"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
 	pgx "github.com/jackc/pgx/v5"
-	"github.com/joho/godotenv"
 )
 
 // AddEnrichedData is the resolver for the addEnrichedData field.
-func (r *mutationResolver) AddEnrichedData(ctx context.Context, input model.NewEnrichedData) (*model.EnrichedData, error) {
-	panic(fmt.Errorf("not implemented: AddEnrichedData - addEnrichedData"))
+func (r *mutationResolver) AddEnrichedData(ctx context.Context, input model.NewEnrichedData) (string, error) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	db, err := pgx.Connect(context.Background(), databaseURL)
+	if err != nil {
+		return "error: can't connect to database", err
+	}
+	defer db.Close(context.Background())
+
+	query := "INSERT INTO enriched_data (name, surname, patronymic, age, gender, nationality) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id"
+	row := db.QueryRow(context.Background(), query, input.Name, input.Surname, input.Patronymic, input.Age, input.Gender, input.Nationality)
+
+	var id int
+	if err := row.Scan(&id); err != nil {
+		return "error: something went wrong while adding data", err
+	}
+	return "success: data added", nil
 }
 
 // DelEnrichedData is the resolver for the delEnrichedData field.
-func (r *mutationResolver) DelEnrichedData(ctx context.Context, id string) (*string, error) {
-	panic(fmt.Errorf("not implemented: DelEnrichedData - delEnrichedData"))
+func (r *mutationResolver) DelEnrichedData(ctx context.Context, id string) (string, error) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	db, err := pgx.Connect(context.Background(), databaseURL)
+	if err != nil {
+		return "error: can't connect to database", err
+	}
+	defer db.Close(context.Background())
+
+	query := "DELETE FROM enriched_data WHERE id = $1"
+	res, err := db.Exec(context.Background(), query, id)
+	if err != nil {
+		return "error: failed to delete row", err
+	}
+	if res.RowsAffected() == 0 {
+		return "error: prodived id not found", nil
+	}
+	return "success: row deleted", nil
 }
 
 // UpdateEnrichedData is the resolver for the updateEnrichedData field.
-func (r *mutationResolver) UpdateEnrichedData(ctx context.Context, id string, input model.UpdateEnrichedData) (*model.EnrichedData, error) {
-	panic(fmt.Errorf("not implemented: UpdateEnrichedData - updateEnrichedData"))
+func (r *mutationResolver) UpdateEnrichedData(ctx context.Context, id string, input model.UpdateEnrichedData) (string, error) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	db, err := pgx.Connect(context.Background(), databaseURL)
+	if err != nil {
+		return "error: can't connect to database", err
+	}
+	defer db.Close(context.Background())
+
+	argsString, args := parseUpdateRequestParams(&input)
+	if len(argsString) == 0 {
+		return "error: no parameters passed", nil
+	}
+
+	args = append(args, id)
+	query := "UPDATE enriched_data SET " + strings.Join(argsString, ", ") + " WHERE id = $" + strconv.Itoa(len(args))
+	res, err := db.Exec(context.Background(), query, args...)
+	if err != nil {
+		return "error: failed to update row", err
+	}
+	if res.RowsAffected() == 0 {
+		return "error: provided ID not found", nil
+	}
+	return "success: updated fields for provided ID", nil
 }
 
 // EnrichedData is the resolver for the EnrichedData field.
 func (r *queryResolver) EnrichedData(ctx context.Context, page *int, age *string, gender *string, nationality *string) ([]*model.EnrichedData, error) {
-	godotenv.Load(".env")
 	databaseURL := os.Getenv("DATABASE_URL")
 	db, err := pgx.Connect(context.Background(), databaseURL)
 	if err != nil {
@@ -68,39 +115,3 @@ func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
-
-func sqlCheckAndWriteArg(arg string, argName string, args *[]interface{}, queryBuilder *strings.Builder) {
-	if arg == "" {
-		return
-	}
-	*args = append(*args, arg)
-	queryBuilder.WriteString(" AND ")
-	queryBuilder.WriteString(argName)
-	queryBuilder.WriteString(" = $")
-	queryBuilder.WriteString(strconv.Itoa(len(*args)))
-}
-
-func sqlWriteArg(arg int, argName string, args *[]interface{}, queryBuilder *strings.Builder) {
-	*args = append(*args, arg)
-	queryBuilder.WriteString(" ")
-	queryBuilder.WriteString(argName)
-	queryBuilder.WriteString(" $")
-	queryBuilder.WriteString(strconv.Itoa(len(*args)))
-}
-
-func generateGetQuery(age string, gender string, nationality string, pageInt int) (string, []interface{}) {
-	limit := 10
-	offset := (pageInt - 1) * limit
-
-	queryBuilder := strings.Builder{}
-	queryBuilder.WriteString("SELECT * FROM enriched_data WHERE 1=1")
-	args := []interface{}{}
-
-	sqlCheckAndWriteArg(age, "age", &args, &queryBuilder)
-	sqlCheckAndWriteArg(gender, "gender", &args, &queryBuilder)
-	sqlCheckAndWriteArg(nationality, "nationality", &args, &queryBuilder)
-	sqlWriteArg(limit, "LIMIT", &args, &queryBuilder)
-	sqlWriteArg(offset, "OFFSET", &args, &queryBuilder)
-
-	return queryBuilder.String(), args
-}

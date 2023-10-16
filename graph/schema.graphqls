@@ -31,7 +31,7 @@ type Query {
 }
 
 type Mutation {
-    addEnrichedData(input: NewEnrichedData!): EnrichedData
-    delEnrichedData(id: ID!): String
-    updateEnrichedData(id: ID!, input: UpdateEnrichedData!): EnrichedData
+    addEnrichedData(input: NewEnrichedData!): String!
+    delEnrichedData(id: ID!): String!
+    updateEnrichedData(id: ID!, input: UpdateEnrichedData!): String!
 }
