@@ -1,0 +1,37 @@
+type EnrichedData {
+    id: ID!,
+    name: String!,
+    surname: String!,
+    patronymic: String,
+    age: Int!,
+    gender: String!,
+    nationality: String!
+}
+
+input NewEnrichedData {
+    name: String!,
+    surname: String!,
+    patronymic: String,
+    age: Int!,
+    gender: String!,
+    nationality: String!
+}
+
+input UpdateEnrichedData {
+    name: String,
+    surname: String,
+    patronymic: String,
+    age: Int,
+    gender: String,
+    nationality: String
+}
+
+type Query {
+    EnrichedData(page: Int = 1, age: String = "", gender: String = "", nationality: String = ""): [EnrichedData]
+}
+
+type Mutation {
+    addEnrichedData(input: NewEnrichedData!): EnrichedData
+    delEnrichedData(id: ID!): String
+    updateEnrichedData(id: ID!, input: UpdateEnrichedData!): EnrichedData
+}

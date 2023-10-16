@@ -22,11 +22,13 @@ func serverInit(ctx context.Context, db *pgx.Conn, dbChannel chan<- EnrichedData
 	ginApp.POST("/enriched-data/", addEnrichedData(dbChannel))
 	ginApp.DELETE("/enriched-data/:id", delEnrichedData(db))
 	ginApp.PUT("/enriched-data/:id", updateEnrichedData(db))
+
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: ginApp,
 	}
 	go server.ListenAndServe()
+
 	<-ctx.Done()
 	server.Shutdown(context.Background())
 	fmt.Printf("Server stopped.")
