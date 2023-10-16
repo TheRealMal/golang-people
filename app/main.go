@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -12,14 +11,18 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const workersNumber = 5
+const (
+	workersNumber = 5
+)
+
+var l = log.New(os.Stdout, "[APP] ", 2)
 
 func initApp() {
 	godotenv.Load(".env")
 	databaseURL := os.Getenv("DATABASE_URL")
 	db, err := pgx.Connect(context.Background(), databaseURL)
 	if err != nil {
-		log.Fatalf("Failed to connect to db: %v\n", err)
+		l.Fatalf("Failed to connect to db: %v\n", err)
 	}
 	defer db.Close(context.Background())
 
@@ -39,26 +42,31 @@ func initApp() {
 
 	go func() {
 		defer wg.Done()
+		l.Println("Starting database goroutine")
 		databaseListener(ctx, dbChannel, db)
 	}()
 	go func() {
 		defer wg.Done()
+		l.Println("Starting enricher goroutine")
 		enrichListener(ctx, dataChannel, dbChannel, errorsChannel)
 	}()
 	go func() {
 		defer wg.Done()
+		l.Println("Starting kafka errors goroutine")
 		kafkaErrorsHandler(ctx, brokers, outTopic, errorsChannel)
 	}()
 	go func() {
 		defer wg.Done()
+		l.Println("Starting kafka goroutine")
 		kafkaHandler(ctx, brokers, inTopic, dataChannel, errorsChannel)
 	}()
 	go func() {
 		defer wg.Done()
+		l.Println("Starting server goroutine")
 		serverInit(ctx, db, dbChannel)
 	}()
 	<-terminationChannel
-	fmt.Printf("Received termination signal; Shutting down...\n")
+	l.Println("Received termination signal; Shutting down...")
 	cancelCtx()
 	wg.Wait()
 }

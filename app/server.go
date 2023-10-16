@@ -38,7 +38,7 @@ func serverInit(ctx context.Context, db *pgx.Conn, dbChannel chan<- EnrichedData
 
 	<-ctx.Done()
 	server.Shutdown(context.Background())
-	fmt.Printf("Server stopped.")
+	l.Println("Server stopped.")
 }
 
 func graphqlHandler() gin.HandlerFunc {

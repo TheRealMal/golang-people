@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"log"
 	"os"
 	"os/signal"
 
@@ -29,24 +27,23 @@ func kafkaHandler(ctx context.Context, brokers []string, topic string, dataChann
 	// Create new Kafka consumer
 	consumer, err := sarama.NewConsumer(brokers, nil)
 	if err != nil {
-		log.Fatalf("Error creating Kafka consumer: %v", err)
+		l.Fatalf("Error creating Kafka consumer: %v", err)
 	}
 	defer consumer.Close()
 	// Create new Kafka topic consumer
 	partitionConsumer, err := consumer.ConsumePartition(topic, 0, sarama.OffsetNewest)
 	if err != nil {
-		log.Fatalf("Error creating Kafka partition consumer: %v", err)
+		l.Fatalf("Error creating Kafka partition consumer: %v", err)
 	}
 	defer partitionConsumer.Close()
 
 	// Channel for termination signal
 	sigterm := make(chan os.Signal, 1)
 	signal.Notify(sigterm, os.Interrupt)
-	fmt.Printf("Waiting for Kafka messages...\n")
 	for {
 		select {
 		case msg := <-partitionConsumer.Messages():
-			fmt.Printf("Received message: %s\n", msg.Value)
+			l.Printf("Received message: %s\n", msg.Value)
 			var bodyFIO BodyData
 			if err := json.Unmarshal(msg.Value, &bodyFIO); err != nil {
 				errorsChannel <- prepareErrorBytes[BodyData]("Failed while parsing json", &bodyFIO)
@@ -62,7 +59,7 @@ func kafkaHandler(ctx context.Context, brokers []string, topic string, dataChann
 			}
 			dataChannel <- bodyFIO
 		case <-ctx.Done():
-			fmt.Printf("Kafka queue listener stopped.\n")
+			l.Println("Kafka queue listener stopped.")
 			return
 		}
 	}
@@ -87,8 +84,9 @@ func sendErrorToQueue(producer *sarama.SyncProducer, topic string, data []byte) 
 		Value: sarama.StringEncoder(string(data)),
 	}
 	if _, _, err := (*producer).SendMessage(failedMsg); err != nil {
-		log.Printf("Failed to send message to %s queue: %v\n", topic, err)
+		l.Printf("Failed to send message to %s queue: %v\n", topic, err)
 	}
+	l.Printf("Successfully sent error to %s\n queue", topic)
 }
 
 // Listens error channel
@@ -96,7 +94,7 @@ func sendErrorToQueue(producer *sarama.SyncProducer, topic string, data []byte) 
 func kafkaErrorsHandler(ctx context.Context, brokers []string, topic string, errorsChannel <-chan []byte) {
 	producer, err := sarama.NewSyncProducer(brokers, nil)
 	if err != nil {
-		log.Fatalf("Error creating Kafka producer: %v", err)
+		l.Fatalf("Error creating Kafka producer: %v", err)
 	}
 	defer producer.Close()
 	for {
@@ -104,7 +102,7 @@ func kafkaErrorsHandler(ctx context.Context, brokers []string, topic string, err
 		case msg := <-errorsChannel:
 			sendErrorToQueue(&producer, topic, msg)
 		case <-ctx.Done():
-			fmt.Printf("Kafka errors listener stopped.\n")
+			l.Println("Kafka errors listener stopped.")
 			return
 		}
 	}

@@ -24,9 +24,11 @@ func databaseListener(ctx context.Context, dbChannel <-chan EnrichedData, db *pg
 		case data := <-dbChannel:
 			if err := insertEnrichedData(db, &data); err != nil {
 				fmt.Printf("Failed to insert row: %v\n", err)
+				break
 			}
+			l.Println("Successfully inserted data to db.")
 		case <-ctx.Done():
-			fmt.Printf("Database listener stopped.\n")
+			l.Printf("Database listener stopped.\n")
 			return
 		}
 	}

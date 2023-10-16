@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 )
 
@@ -92,12 +91,14 @@ func enrichListener(ctx context.Context, dataChannel <-chan BodyData, dbChannel 
 		case data := <-dataChannel:
 			enriched, err := enrichData(&data)
 			if err != nil {
+				l.Println("Failed while enriching data.")
 				errorsChannel <- prepareErrorBytes[BodyData](err.Error(), &data)
 				break
 			}
+			l.Println("Successfully enriched data.")
 			dbChannel <- enriched
 		case <-ctx.Done():
-			fmt.Printf("Enriched data listener stopped.\n")
+			l.Printf("Enriched data listener stopped.\n")
 			return
 		}
 	}

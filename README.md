@@ -14,12 +14,14 @@ bash scripts/kafka/kafka.sh # Run Kafka
 bash scripts/kafka/k-producer.sh # Run Kafka producer for topic from .env (FIO)
 bash scripts/kafka/k-consumer.sh # Run Kafka consumer for topic from .env (FIO_FAILED)
 ```
+> kafka producer + consumer w/ docker
+> https://habr.com/ru/articles/738874/
 ### GraphQL Generate
 ```sh
 go run github.com/99designs/gqlgen init # USE ONLY ONCE: Init files
 go run github.com/99designs/gqlgen generate # Generate code if schema.graphqls updated
 ```
-### REST + GraphQL API 
+### REST + GraphQL API
 ```sh
 go run app/app
 ```
