@@ -1,4 +1,6 @@
 # Golang people
+Service that listens Kafka topic for new people and adds them to PostgreSQL database. All failed requests being redirected to another Kafka topic. Database can also be accessed through REST/GraphQL API (Get, add, update or delete people).
+
 ## Development section
 ### SQL Migration
 ```sh
@@ -16,14 +18,14 @@ bash scripts/kafka/k-consumer.sh # Run Kafka consumer for topic from .env (FIO_F
 ```sh
 go run app/...
 ```
-### GrapgQL API
+### GraphQL API
 ```sh
-go run github.com/99designs/gqlgen init # Init files
-go run github.com/99designs/gqlgen generate # Generate when schema written
+go run github.com/99designs/gqlgen init # USE ONLY ONCE: Init files
+go run github.com/99designs/gqlgen generate # Generate code if schema.graphqls updated
 go run ./gserver.go # Run graphql server
 ```
 
-## TODO
+### TODO
 Реализовать сервис, который будет получать поток ФИО, из открытых api обогащать ответ наиболее вероятными возрастом, полом и национальностью, и сохранять данные в БД. По запросу выдавать инфу о найденных людях. Необходимо реализовать следующее
 - [x] Сервис слушает очередь Kafka FIO, в котором приходит информация с ФИО в формате
 ```go
