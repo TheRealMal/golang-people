@@ -2,10 +2,23 @@ package graph
 
 import (
 	"app/graph/model"
+	"context"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
+
+	pgx "github.com/jackc/pgx/v5"
 )
+
+func connectDatabase() (*pgx.Conn, error) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	db, err := pgx.Connect(context.Background(), databaseURL)
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
+}
 
 func sqlCheckAndWriteArg(arg string, argName string, args *[]interface{}, queryBuilder *strings.Builder) {
 	if arg == "" {

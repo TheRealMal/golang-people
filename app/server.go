@@ -1,12 +1,15 @@
 package main
 
 import (
+	"app/graph"
 	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
@@ -18,10 +21,14 @@ type EnrichedDataWithID struct {
 
 func serverInit(ctx context.Context, db *pgx.Conn, dbChannel chan<- EnrichedData) {
 	router := gin.Default()
+
 	router.GET("/enriched-data/", getEnrichedData(db))
 	router.POST("/enriched-data/", addEnrichedData(dbChannel))
 	router.DELETE("/enriched-data/:id", delEnrichedData(db))
 	router.PUT("/enriched-data/:id", updateEnrichedData(db))
+
+	router.POST("/query", graphqlHandler())
+	router.GET("/", playgroundHandler())
 
 	server := &http.Server{
 		Addr:    ":8080",
@@ -32,6 +39,26 @@ func serverInit(ctx context.Context, db *pgx.Conn, dbChannel chan<- EnrichedData
 	<-ctx.Done()
 	server.Shutdown(context.Background())
 	fmt.Printf("Server stopped.")
+}
+
+func graphqlHandler() gin.HandlerFunc {
+	h := handler.NewDefaultServer(
+		graph.NewExecutableSchema(
+			graph.Config{
+				Resolvers: &graph.Resolver{},
+			},
+		),
+	)
+	return func(c *gin.Context) {
+		h.ServeHTTP(c.Writer, c.Request)
+	}
+}
+
+func playgroundHandler() gin.HandlerFunc {
+	h := playground.Handler("GraphQL Playground", "/query")
+	return func(c *gin.Context) {
+		h.ServeHTTP(c.Writer, c.Request)
+	}
 }
 
 func parseUpdateRequestParams(c *gin.Context) ([]string, []interface{}) {

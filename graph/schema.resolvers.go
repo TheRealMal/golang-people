@@ -7,17 +7,13 @@ package graph
 import (
 	"app/graph/model"
 	"context"
-	"os"
 	"strconv"
 	"strings"
-
-	pgx "github.com/jackc/pgx/v5"
 )
 
 // AddEnrichedData is the resolver for the addEnrichedData field.
 func (r *mutationResolver) AddEnrichedData(ctx context.Context, input model.NewEnrichedData) (string, error) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	db, err := pgx.Connect(context.Background(), databaseURL)
+	db, err := connectDatabase()
 	if err != nil {
 		return "error: can't connect to database", err
 	}
@@ -35,8 +31,7 @@ func (r *mutationResolver) AddEnrichedData(ctx context.Context, input model.NewE
 
 // DelEnrichedData is the resolver for the delEnrichedData field.
 func (r *mutationResolver) DelEnrichedData(ctx context.Context, id string) (string, error) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	db, err := pgx.Connect(context.Background(), databaseURL)
+	db, err := connectDatabase()
 	if err != nil {
 		return "error: can't connect to database", err
 	}
@@ -55,8 +50,7 @@ func (r *mutationResolver) DelEnrichedData(ctx context.Context, id string) (stri
 
 // UpdateEnrichedData is the resolver for the updateEnrichedData field.
 func (r *mutationResolver) UpdateEnrichedData(ctx context.Context, id string, input model.UpdateEnrichedData) (string, error) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	db, err := pgx.Connect(context.Background(), databaseURL)
+	db, err := connectDatabase()
 	if err != nil {
 		return "error: can't connect to database", err
 	}
@@ -81,8 +75,7 @@ func (r *mutationResolver) UpdateEnrichedData(ctx context.Context, id string, in
 
 // EnrichedData is the resolver for the EnrichedData field.
 func (r *queryResolver) EnrichedData(ctx context.Context, page *int, age *string, gender *string, nationality *string) ([]*model.EnrichedData, error) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	db, err := pgx.Connect(context.Background(), databaseURL)
+	db, err := connectDatabase()
 	if err != nil {
 		return nil, err
 	}
