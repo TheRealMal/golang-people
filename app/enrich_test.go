@@ -43,8 +43,8 @@ func TestBadExample(t *testing.T) {
 	cancelCtx()
 	var testError ErrorData
 	if err := json.Unmarshal(res, &testError); err == nil {
-		assert.Equal(t, "Provided FIO does not exist", *testError.ErrorMsg)
+		assert.Equal(t, "provided FIO does not exist", *testError.ErrorMsg)
 		return
 	}
-	t.Error("Wrong error message format")
+	t.Error("wrong error message format")
 }

@@ -19,11 +19,13 @@ const (
 var l = log.New(os.Stdout, "[APP] ", 2)
 
 func initApp() {
-	godotenv.Load(".env")
+	if err := godotenv.Load(".env"); err != nil {
+		l.Printf("something went wrong while reading .env: %s\n", err.Error())
+	}
 	databaseURL := os.Getenv("DATABASE_URL")
 	db, err := pgx.Connect(context.Background(), databaseURL)
 	if err != nil {
-		l.Fatalf("Failed to connect to db: %v\n", err)
+		l.Fatalf("failed to connect to db: %v\n", err)
 	}
 	defer db.Close(context.Background())
 
@@ -44,37 +46,37 @@ func initApp() {
 	signal.Notify(terminationChannel, os.Interrupt)
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
-	wg.Add(5)
+	wg.Add(workersNumber)
 	defer func() {
 		<-terminationChannel
-		l.Println("Received termination signal; Shutting down...")
+		l.Println("received termination signal; Shutting down...")
 		cancelCtx()
 		wg.Wait()
 	}()
 
 	go func() {
 		defer wg.Done()
-		l.Println("Starting database goroutine")
+		l.Println("starting database goroutine")
 		databaseListener(ctx, dbChannel, db, rdb)
 	}()
 	go func() {
 		defer wg.Done()
-		l.Println("Starting enricher goroutine")
+		l.Println("starting enricher goroutine")
 		enrichListener(ctx, dataChannel, dbChannel, errorsChannel)
 	}()
 	go func() {
 		defer wg.Done()
-		l.Println("Starting kafka errors goroutine")
+		l.Println("starting kafka errors goroutine")
 		kafkaErrorsHandler(ctx, brokers, outTopic, errorsChannel)
 	}()
 	go func() {
 		defer wg.Done()
-		l.Println("Starting kafka goroutine")
+		l.Println("starting kafka goroutine")
 		kafkaHandler(ctx, brokers, inTopic, dataChannel, errorsChannel)
 	}()
 	go func() {
 		defer wg.Done()
-		l.Println("Starting server goroutine")
+		l.Println("starting server goroutine")
 		serverInit(ctx, db, rdb, dbChannel)
 	}()
 }
