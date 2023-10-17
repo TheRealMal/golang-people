@@ -41,7 +41,7 @@ func serverInit(ctx context.Context, db *pgx.Conn, rdb *redis.Client, dbChannel 
 
 	<-ctx.Done()
 	server.Shutdown(context.Background())
-	l.Println("Server stopped.")
+	l.Println("server stopped.")
 }
 
 func checkCache(rdb *redis.Client) gin.HandlerFunc {
@@ -56,7 +56,11 @@ func checkCache(rdb *redis.Client) gin.HandlerFunc {
 			return
 		}
 		response := []EnrichedDataWithID{}
-		json.Unmarshal(val, &response)
+		err = json.Unmarshal(val, &response)
+		if err != nil {
+			l.Printf("something went wrong while unmarshalling cache: %v\n", err.Error())
+			return
+		}
 		c.JSON(http.StatusOK, response)
 		c.Abort()
 	}
@@ -71,12 +75,12 @@ func cacheResponse(a *string, g *string, n *string, p *string, response *[]Enric
 	cacheKey.WriteString(*p)
 	resultsJSON, err := json.Marshal(*response)
 	if err != nil {
-		l.Printf("Failed to marshal data: %v\n", err)
+		l.Printf("failed to marshal data: %v\n", err)
 		return err
 	}
 	cacheErr := rdb.Set(context.Background(), cacheKey.String(), resultsJSON, 360*time.Second).Err()
 	if cacheErr != nil {
-		l.Printf("Something went wrong while caching: %v\n", cacheErr)
+		l.Printf("something went wrong while caching: %v\n", cacheErr)
 		return cacheErr
 	}
 	return nil
@@ -186,6 +190,8 @@ func addEnrichedData(dbChannel chan<- EnrichedData, rdb *redis.Client) gin.Handl
 			return
 		}
 		dbChannel <- *requestBody
+		rdb.FlushDB(context.Background())
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	}
 	return gin.HandlerFunc(fn)
 }
@@ -260,7 +266,9 @@ func getEnrichedData(db *pgx.Conn, rdb *redis.Client) gin.HandlerFunc {
 			results = append(results, data)
 		}
 
-		cacheResponse(&age, &gender, &nationality, &page, &results, rdb)
+		if err := cacheResponse(&age, &gender, &nationality, &page, &results, rdb); err != nil {
+			l.Printf("something went wrong while caching: %s\n", err.Error())
+		}
 		c.JSON(http.StatusOK, results)
 	}
 	return gin.HandlerFunc(fn)

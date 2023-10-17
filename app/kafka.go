@@ -43,14 +43,24 @@ func kafkaHandler(ctx context.Context, brokers []string, topic string, dataChann
 	for {
 		select {
 		case msg := <-partitionConsumer.Messages():
-			l.Printf("Received message: %s\n", msg.Value)
+			l.Printf("received message: %s\n", msg.Value)
 			var bodyFIO BodyData
 			if err := json.Unmarshal(msg.Value, &bodyFIO); err != nil {
-				errorsChannel <- prepareErrorBytes[BodyData]("Failed while parsing json", &bodyFIO)
+				errorBytes, err := prepareErrorBytes[BodyData]("Failed while parsing json", &bodyFIO)
+				if err != nil {
+					l.Printf("something went wrong while generating error bytes: %s\n", err.Error())
+					continue
+				}
+				errorsChannel <- errorBytes
 				continue
 			}
 			if bodyFIO.Name == nil || bodyFIO.Surname == nil {
-				errorsChannel <- prepareErrorBytes[BodyData]("Required fields not found", &bodyFIO)
+				errorBytes, err := prepareErrorBytes[BodyData]("Required fields not found", &bodyFIO)
+				if err != nil {
+					l.Printf("something went wrong while generating error bytes: %s\n", err.Error())
+					continue
+				}
+				errorsChannel <- errorBytes
 				continue
 			}
 			if bodyFIO.Patronymic == nil {
@@ -59,7 +69,7 @@ func kafkaHandler(ctx context.Context, brokers []string, topic string, dataChann
 			}
 			dataChannel <- bodyFIO
 		case <-ctx.Done():
-			l.Println("Kafka queue listener stopped.")
+			l.Println("kafka queue listener stopped.")
 			return
 		}
 	}
@@ -67,14 +77,20 @@ func kafkaHandler(ctx context.Context, brokers []string, topic string, dataChann
 
 // Returns bytes array for given message and body
 // that led to error
-func prepareErrorBytes[T any](message string, data *T) []byte {
-	bodyBytes, _ := json.Marshal(*data)
-	body := string(bodyBytes[:])
-	jsonErrorMsg, _ := json.Marshal(ErrorData{
+func prepareErrorBytes[T any](message string, data *T) ([]byte, error) {
+	bodyBytes, err := json.Marshal(*data)
+	if err != nil {
+		return []byte{}, err
+	}
+	body := string(bodyBytes)
+	jsonErrorMsg, err := json.Marshal(ErrorData{
 		ErrorMsg: &message,
 		Body:     &body,
 	})
-	return jsonErrorMsg
+	if err != nil {
+		return []byte{}, err
+	}
+	return jsonErrorMsg, nil
 }
 
 // Sends error message to Kafka queue
@@ -84,9 +100,9 @@ func sendErrorToQueue(producer *sarama.SyncProducer, topic string, data []byte) 
 		Value: sarama.StringEncoder(string(data)),
 	}
 	if _, _, err := (*producer).SendMessage(failedMsg); err != nil {
-		l.Printf("Failed to send message to %s queue: %v\n", topic, err)
+		l.Printf("failed to send message to %s queue: %v\n", topic, err)
 	}
-	l.Printf("Successfully sent error to %s\n queue", topic)
+	l.Printf("successfully sent error to %s\n queue", topic)
 }
 
 // Listens error channel
@@ -102,7 +118,7 @@ func kafkaErrorsHandler(ctx context.Context, brokers []string, topic string, err
 		case msg := <-errorsChannel:
 			sendErrorToQueue(&producer, topic, msg)
 		case <-ctx.Done():
-			l.Println("Kafka errors listener stopped.")
+			l.Println("kafka errors listener stopped.")
 			return
 		}
 	}

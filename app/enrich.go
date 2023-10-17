@@ -32,7 +32,7 @@ type NationalityBody struct {
 	Count       int    `json:"count"`
 	Name        string `json:"name"`
 	Nationality []struct {
-		Country_id  string  `json:"country_id"`
+		CountryID   string  `json:"country_id"`
 		Probability float64 `json:"probability"`
 	} `json:"country"`
 }
@@ -72,7 +72,7 @@ func enrichData(bodyData *BodyData) (EnrichedData, error) {
 	}
 
 	if ageRes.Age == nil || genderRes.Gender == nil || len(nationalityRes.Nationality) == 0 {
-		return EnrichedData{}, errors.New("Provided FIO does not exist")
+		return EnrichedData{}, errors.New("provided FIO does not exist")
 	}
 	return EnrichedData{
 		Name:        *bodyData.Name,
@@ -80,7 +80,7 @@ func enrichData(bodyData *BodyData) (EnrichedData, error) {
 		Patronymic:  *bodyData.Patronymic,
 		Age:         *ageRes.Age,
 		Gender:      *genderRes.Gender,
-		Nationality: nationalityRes.Nationality[0].Country_id,
+		Nationality: nationalityRes.Nationality[0].CountryID,
 	}, nil
 }
 
@@ -91,14 +91,19 @@ func enrichListener(ctx context.Context, dataChannel <-chan BodyData, dbChannel 
 		case data := <-dataChannel:
 			enriched, err := enrichData(&data)
 			if err != nil {
-				l.Println("Failed while enriching data.")
-				errorsChannel <- prepareErrorBytes[BodyData](err.Error(), &data)
+				l.Println("failed while enriching data.")
+				errorBytes, prepareError := prepareErrorBytes[BodyData](err.Error(), &data)
+				if prepareError != nil {
+					l.Printf("something went wrong while generating error bytes: %s\n", prepareError.Error())
+					continue
+				}
+				errorsChannel <- errorBytes
 				break
 			}
-			l.Println("Successfully enriched data.")
+			l.Println("successfully enriched data.")
 			dbChannel <- enriched
 		case <-ctx.Done():
-			l.Printf("Enriched data listener stopped.\n")
+			l.Printf("enriched data listener stopped.\n")
 			return
 		}
 	}
